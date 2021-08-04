@@ -1,9 +1,9 @@
 import matplotlib.pyplot as plt
 import re
+import signal
 import subprocess
 import sys
 import threading
-import time
 
 x_data = []
 y_data = []
@@ -16,22 +16,32 @@ ax.set_xlabel('Seconds')
 ax.set_ylabel('Current (mA)')
 ax.set_title('mA\n')
 
+signal.signal(signal.SIGINT, lambda sig, frame: plt.close('all'))
+
 
 class Tail():
     def __init__(self, file_name, callback_line=sys.stdout.write):
         self.file_name = file_name
         self.callback_line = callback_line
+        self.should_stop = False
+
+    def stop(self):
+        self.should_stop = True
 
     def follow(self):
         command = subprocess.Popen(
-            ['tail', '-f', self.file_name],
+            ['tail', '-n 1', '-f', self.file_name],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
 
         while True:
             line = command.stdout.readline().decode("utf-8")
             self.callback_line(line)
-            time.sleep(0.01)
+            if (self.should_stop):
+                break
+
+        print("Stop following file!")
+        self.should_stop = False
 
 
 def append_data_from_line(line):
@@ -40,7 +50,7 @@ def append_data_from_line(line):
         return False
 
     data_to_plot = [
-        float(matches.group('time')),
+        int(matches.group('time')),
         float(matches.group('current'))
     ]
 
@@ -53,22 +63,28 @@ def append_data_from_line(line):
 
 def plot_chart():
     plt.cla()
+
+    if (len(x_data) == 0):
+        return
+
     x_last = x_data[-1]
     y_last = y_data[-1]
     ax.plot(x_data, y_data, c='#EC5E29')
-    ax.text(x_last, y_last, "{} mA".format(x_last))
+    ax.text(x_last, y_last, "{} mA".format(y_last))
     ax.scatter(x_last, y_last, c='#EC5E29')
     plt.draw()
 
 
-def observe_file_within_thread(path_to_observe):
+def follow_tail_within_thread(path_to_observe):
     tail = Tail(
         path_to_observe,
         lambda line: plot_chart() if append_data_from_line(line) else 0
     )
     follow_file = lambda x: tail.follow()
     file_observer_thread = threading.Thread(target=follow_file, args=(1,))
+    file_observer_thread.setDaemon(True)
     file_observer_thread.start()
+    return file_observer_thread
 
 
 if __name__ == "__main__":
@@ -77,6 +93,7 @@ if __name__ == "__main__":
         sys.exit(-1)
 
     path_to_observe = sys.argv[1]
-    observe_file_within_thread(path_to_observe)
 
+    follow_tail_within_thread(path_to_observe)
     plt.show()
+    sys.exit(0)
