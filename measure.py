@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 import re
 import signal
 import sys
@@ -7,6 +8,8 @@ import serial
 
 x_data = []
 y_data = []
+current_aggregate = 0
+current_max = 0
 readed_line_regex = re.compile('^(?P<time>[0-9.]+?) (?P<current>[0-9.]+?)[\t\s\n]+$')
 
 figure = plt.figure(figsize=(12, 6), facecolor='#DEDEDE')
@@ -35,6 +38,8 @@ class TailSerial():
 
 
 def append_data_from_line(line):
+    global current_aggregate
+    global current_max
     matches = readed_line_regex.match(line)
     if not (matches):
         return False
@@ -47,6 +52,10 @@ def append_data_from_line(line):
     print(data_to_plot)
     x_data.append(data_to_plot[0])
     y_data.append(data_to_plot[1])
+
+    current_aggregate += data_to_plot[1]
+    if (data_to_plot[1] > current_max):
+        current_max = data_to_plot[1]
 
     return True
 
@@ -66,6 +75,16 @@ def plot_chart():
     ax.plot(x_data, y_data, c='#EC5E29')
     ax.text(x_last, y_last, "{} mA".format(y_last))
     ax.scatter(x_last, y_last, c='#EC5E29')
+
+    handles = [
+        mpatches.Patch(
+            label=f"avg current: {round(current_aggregate/len(y_data), 2)} mA",
+            visible=False),
+        mpatches.Patch(
+            label=f"max current: {round(current_max, 2)} mA",
+            visible=False)
+    ]
+    plt.legend(handles=handles, loc="upper right")
     plt.draw()
 
 
