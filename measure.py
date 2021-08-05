@@ -14,20 +14,11 @@ class TailSerial():
     def __init__(self, serial, callback_line=sys.stdout.write):
         self.serial = serial
         self.callback_line = callback_line
-        self.should_stop = False
-
-    def stop(self):
-        self.should_stop = True
 
     def follow(self):
         while True:
             line = self.serial.readline()
             self.callback_line(line.decode("utf-8"))
-            if (self.should_stop):
-                break
-
-        print("Stop following file!")
-        self.should_stop = False
 
 
 class ElectricalCurrentChart():
