@@ -6,16 +6,8 @@ import sys
 import threading
 import serial
 
-x_data = []
-y_data = []
-milisseconds_beginning = 0
-current_aggregate = 0
-current_max = 0
-readed_line_regex = re.compile('^(?P<time>[0-9.]+?) (?P<current>[0-9.]+?)[\t\s\n]+$')
-
-figure = plt.figure(figsize=(12, 6), facecolor='#DEDEDE')
-ax = figure.add_subplot(111)
 signal.signal(signal.SIGINT, lambda sig, frame: plt.close('all'))
+readed_line_regex = re.compile('^(?P<time>[0-9.]+?) (?P<current>[0-9.]+?)[\t\s\n]+$')
 
 
 class TailSerial():
@@ -38,76 +30,70 @@ class TailSerial():
         self.should_stop = False
 
 
-def append_data_from_line(line):
-    global current_aggregate
-    global current_max
-    global milisseconds_beginning
+class ElectricalCurrentChart():
+    def __init__(self, subplot=111):
+        figure = plt.figure(figsize=(12, 6), facecolor='#DEDEDE')
+        self.ax = figure.add_subplot(subplot)
+        self.x_data = []
+        self.y_data = []
+        self.milisseconds_beginning = 0
+        self.max_current = 0
+        self.aggregated_current = 0
+
+    def append_data(self, milliseconds, current):
+        print([milliseconds, current])
+
+        if len(self.x_data) == 0:
+            self.milisseconds_beginning = milliseconds
+
+        self.x_data.append(milliseconds - self.milisseconds_beginning)
+        self.y_data.append(current)
+
+        self.aggregated_current += current
+        if (current > self.max_current):
+            self.max_current = current
+
+    def plot(self):
+        if (len(self.x_data) == 0 or len(self.x_data) % 100 != 0):
+            return
+
+        plt.cla()
+        self.ax.set_facecolor('#DEDEDE')
+        self.ax.set_xlabel('Milliseconds')
+        self.ax.set_ylabel('Current (mA)')
+        self.ax.set_title('mA\n')
+
+        x_last = self.x_data[-1]
+        y_last = self.y_data[-1]
+        self.ax.plot(self.x_data, self.y_data)
+        self.ax.text(x_last, y_last, "{} mA".format(y_last))
+        self.ax.scatter(x_last, y_last)
+
+        avg_current = round(self.aggregated_current/len(self.y_data), 2)
+        consumption = avg_current*(self.x_data[-1] - self.x_data[0])/(3.6*10**6)
+        label = f"avg current: {avg_current} mA\n"
+        label += f"max current: {round(self.max_current, 2)} mA\n"
+        label += f"consumption: {round(consumption, 3)} mAh"
+        plt.legend(handles=[mpatches.Patch(label=label)], loc="upper right")
+        plt.draw()
+
+
+def append_line_in_chart(chart, line):
     matches = readed_line_regex.match(line)
     if not (matches):
-        return False
-
-    data_to_plot = [
+        return
+    chart.append_data(
         int(matches.group('time')),
         float(matches.group('current'))
-    ]
-
-    if len(x_data) == 0:
-        milisseconds_beginning = data_to_plot[0]
-
-    print(data_to_plot)
-    x_data.append(data_to_plot[0] - milisseconds_beginning)
-    y_data.append(data_to_plot[1])
-
-    current_aggregate += data_to_plot[1]
-    if (data_to_plot[1] > current_max):
-        current_max = data_to_plot[1]
-
-    return True
-
-
-def plot_chart():
-    if (len(x_data) == 0 or len(x_data) % 100 != 0):
-        return
-
-    plt.cla()
-    ax.set_facecolor('#DEDEDE')
-    ax.set_xlabel('Milliseconds')
-    ax.set_ylabel('Current (mA)')
-    ax.set_title('mA\n')
-
-    x_last = x_data[-1]
-    y_last = y_data[-1]
-    ax.plot(x_data, y_data, c='#EC5E29')
-    ax.text(x_last, y_last, "{} mA".format(y_last))
-    ax.scatter(x_last, y_last, c='#EC5E29')
-
-    avg_current = round(current_aggregate/len(y_data), 2)
-    consumption = avg_current*(x_data[-1] - x_data[0])/(3.6*10**6)
-    handles = [
-        mpatches.Patch(
-            label=f"avg current: {avg_current} mA",
-            visible=False),
-        mpatches.Patch(
-            label=f"max current: {round(current_max, 2)} mA",
-            visible=False),
-        mpatches.Patch(
-            label=f"consumption: {round(consumption, 3)} mAh",
-            visible=False)
-    ]
-    plt.legend(handles=handles, loc="upper right")
-    plt.draw()
-
-
-def plot_data_from_serial(serial):
-    tail = TailSerial(
-        serial,
-        lambda line: plot_chart() if append_data_from_line(line) else 0
     )
+    chart.plot()
 
-    follow_serial = lambda x: tail.follow()
-    serial_observer_thread = threading.Thread(target=follow_serial, args=(1,))
-    serial_observer_thread.setDaemon(True)
-    serial_observer_thread.start()
+
+def observe_serial(on_new_line):
+    tail_serial = TailSerial(serial, on_new_line)
+    serial_follow = threading.Thread(target=lambda x: tail_serial.follow(), args=(1,))
+    serial_follow.setDaemon(True)
+    serial_follow.start()
 
 
 if __name__ == "__main__":
@@ -119,11 +105,12 @@ if __name__ == "__main__":
         print(f"\033[91m [FAIL] Missing baudrate for port \"`{sys.argv[1]}`\"")
         sys.exit(-1)
 
-    serial = serial.Serial(sys.argv[1], sys.argv[2], timeout=5)
+    serial = serial.Serial(sys.argv[1], sys.argv[2])
     serial.close()
     serial.open()
 
-    plot_data_from_serial(serial)
-
+    chart = ElectricalCurrentChart(111)
+    observe_serial(lambda line: append_line_in_chart(chart, line))
     plt.show()
+
     sys.exit(0)
