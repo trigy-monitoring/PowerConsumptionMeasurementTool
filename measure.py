@@ -36,33 +36,45 @@ class ElectricalCurrentChart():
         self.ax = figure.add_subplot(subplot)
         self.x_data = []
         self.y_data = []
-        self.milisseconds_beginning = 0
+        self.reads = 0
+        self.milisseconds_at_begin = 0
         self.max_current = 0
         self.aggregated_current = 0
+        self.setup()
 
     def append_data(self, milliseconds, current):
         print([milliseconds, current])
+        self.reads += 1
 
         if len(self.x_data) == 0:
-            self.milisseconds_beginning = milliseconds
+            self.milisseconds_at_begin = milliseconds
 
-        self.x_data.append(milliseconds - self.milisseconds_beginning)
+        # Prevents to plot more than two repeated values
+        if len(self.y_data) >= 2:
+            if (current == self.y_data[-1] and self.y_data[-1] == self.y_data[-2]):
+                self.y_data.pop()
+                self.x_data.pop()
+
+        self.x_data.append(milliseconds - self.milisseconds_at_begin)
         self.y_data.append(current)
 
         self.aggregated_current += current
         if (current > self.max_current):
             self.max_current = current
 
-    def plot(self):
-        if (len(self.x_data) == 0 or len(self.x_data) % 100 != 0):
-            return
-
+    def setup(self):
         plt.cla()
         self.ax.set_facecolor('#DEDEDE')
         self.ax.set_xlabel('Milliseconds')
         self.ax.set_ylabel('Current (mA)')
-        self.ax.set_title('mA\n')
+        self.ax.set_title('Power Consumption\n')
 
+    def plot(self):
+        # Plot once each 100 reads
+        if (self.reads == 0 or self.reads % 100 != 0):
+            return
+
+        self.setup()
         x_last = self.x_data[-1]
         y_last = self.y_data[-1]
         self.ax.plot(self.x_data, self.y_data)
@@ -71,9 +83,9 @@ class ElectricalCurrentChart():
 
         avg_current = round(self.aggregated_current/len(self.y_data), 2)
         consumption = avg_current*(self.x_data[-1] - self.x_data[0])/(3.6*10**6)
-        label = f"avg current: {avg_current} mA\n"
-        label += f"max current: {round(self.max_current, 2)} mA\n"
-        label += f"consumption: {round(consumption, 3)} mAh"
+        label = f"Avg current: {avg_current} mA\n"
+        label += f"Max current: {round(self.max_current, 2)} mA\n"
+        label += f"Consumption: {round(consumption, 3)} mAh"
         plt.legend(handles=[mpatches.Patch(label=label)], loc="upper right")
         plt.draw()
 
@@ -82,6 +94,7 @@ def append_line_in_chart(chart, line):
     matches = readed_line_regex.match(line)
     if not (matches):
         return
+
     chart.append_data(
         int(matches.group('time')),
         float(matches.group('current'))
@@ -109,7 +122,7 @@ if __name__ == "__main__":
     serial.close()
     serial.open()
 
-    chart = ElectricalCurrentChart(111)
+    chart = ElectricalCurrentChart()
     observe_serial(lambda line: append_line_in_chart(chart, line))
     plt.show()
 
