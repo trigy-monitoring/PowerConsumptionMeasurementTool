@@ -81,11 +81,12 @@ class ElectricalCurrentChart():
         self.ax.text(x_last, y_last, "{} mA".format(y_last))
         self.ax.scatter(x_last, y_last)
 
-        avg_current = round(self.aggregated_current/len(self.y_data), 2)
+        avg_current = self.aggregated_current/len(self.y_data)
         consumption = avg_current*(self.x_data[-1] - self.x_data[0])/(3.6*10**6)
-        label = f"Avg current: {avg_current} mA\n"
-        label += f"Max current: {round(self.max_current, 2)} mA\n"
-        label += f"Consumption: {round(consumption, 3)} mAh"
+        label =  f"Reads: {self.reads}\n"
+        label += f"Avg current: {'{:.4f}'.format(round(avg_current, 4))} mA\n"
+        label += f"Max current: {'{:.4f}'.format(round(self.max_current, 4))} mA\n"
+        label += f"Consumption: {'{:.4f}'.format(round(consumption, 4))} mAh"
         plt.legend(handles=[mpatches.Patch(label=label)], loc="upper right")
         plt.draw()
 
