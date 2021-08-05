@@ -8,6 +8,7 @@ import serial
 
 x_data = []
 y_data = []
+milisseconds_beginning = 0
 current_aggregate = 0
 current_max = 0
 readed_line_regex = re.compile('^(?P<time>[0-9.]+?) (?P<current>[0-9.]+?)[\t\s\n]+$')
@@ -40,6 +41,7 @@ class TailSerial():
 def append_data_from_line(line):
     global current_aggregate
     global current_max
+    global milisseconds_beginning
     matches = readed_line_regex.match(line)
     if not (matches):
         return False
@@ -49,8 +51,11 @@ def append_data_from_line(line):
         float(matches.group('current'))
     ]
 
+    if len(x_data) == 0:
+        milisseconds_beginning = data_to_plot[0]
+
     print(data_to_plot)
-    x_data.append(data_to_plot[0])
+    x_data.append(data_to_plot[0] - milisseconds_beginning)
     y_data.append(data_to_plot[1])
 
     current_aggregate += data_to_plot[1]
@@ -66,7 +71,7 @@ def plot_chart():
 
     plt.cla()
     ax.set_facecolor('#DEDEDE')
-    ax.set_xlabel('Seconds')
+    ax.set_xlabel('Milliseconds')
     ax.set_ylabel('Current (mA)')
     ax.set_title('mA\n')
 
@@ -76,12 +81,17 @@ def plot_chart():
     ax.text(x_last, y_last, "{} mA".format(y_last))
     ax.scatter(x_last, y_last, c='#EC5E29')
 
+    avg_current = round(current_aggregate/len(y_data), 2)
+    consumption = avg_current*(x_data[-1] - x_data[0])/(3.6*10**6)
     handles = [
         mpatches.Patch(
-            label=f"avg current: {round(current_aggregate/len(y_data), 2)} mA",
+            label=f"avg current: {avg_current} mA",
             visible=False),
         mpatches.Patch(
             label=f"max current: {round(current_max, 2)} mA",
+            visible=False),
+        mpatches.Patch(
+            label=f"consumption: {round(consumption, 3)} mAh",
             visible=False)
     ]
     plt.legend(handles=handles, loc="upper right")
