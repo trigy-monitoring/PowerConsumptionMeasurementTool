@@ -21,8 +21,8 @@ class TailSerial():
 
     def follow(self):
         while True:
-            line = serial.readline().decode("utf-8")
-            self.callback_line(line)
+            line = self.serial.readline()
+            self.callback_line(line.decode("utf-8"))
             if (self.should_stop):
                 break
 
@@ -102,8 +102,12 @@ def append_line_in_chart(chart, line):
     chart.plot()
 
 
-def observe_serial(on_new_line):
-    tail_serial = TailSerial(serial, on_new_line)
+def observe_serial(port, baudrate, on_new_line):
+    serial_port = serial.Serial(port, baudrate)
+    serial_port.close()
+    serial_port.open()
+
+    tail_serial = TailSerial(serial_port, on_new_line)
     serial_follow = threading.Thread(target=lambda x: tail_serial.follow(), args=(1,))
     serial_follow.setDaemon(True)
     serial_follow.start()
@@ -118,12 +122,12 @@ if __name__ == "__main__":
         print(f"\033[91m [FAIL] Missing baudrate for port \"`{sys.argv[1]}`\"")
         sys.exit(-1)
 
-    serial = serial.Serial(sys.argv[1], sys.argv[2])
-    serial.close()
-    serial.open()
-
     chart = ElectricalCurrentChart()
-    observe_serial(lambda line: append_line_in_chart(chart, line))
+    observe_serial(
+        sys.argv[1],
+        sys.argv[2],
+        lambda line: append_line_in_chart(chart, line))
+
     plt.show()
 
     sys.exit(0)
