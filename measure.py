@@ -18,7 +18,10 @@ class TailSerial():
     def follow(self):
         while True:
             line = self.serial.readline()
-            self.callback_line(line.decode("utf-8"))
+            try:
+                self.callback_line(line.decode("utf-8"))
+            except ValueError:
+                pass
 
 
 class ElectricalCurrentChart():
