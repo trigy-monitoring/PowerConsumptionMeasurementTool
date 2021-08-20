@@ -3,23 +3,33 @@
 
 Adafruit_INA219 ina219(0x40);
 
+#define READING_TIME 90000
+
+long reads = 0;
+
 void setup() {
   Serial.begin(9600);
-  while (!Serial) {}
-
+  while (!Serial) {delay(10);}
   if (! ina219.begin()) {
     Serial.println("Failed to find INA219 chip");
     while (1) {
       delay(10);
     }
   }
+
+  printMeasurement();
 }
 
 void loop() {
-  Serial.print(millis());
-  Serial.print(" ");
-  Serial.print(ina219.getCurrent_mA());
-  Serial.print(" ");
-  Serial.println(ina219.getPower_mW());
+  if (millis() <= READING_TIME) {
+    printMeasurement();
+  }
+
+  reads++;
   delay(1);
+}
+
+void printMeasurement()
+{
+  Serial.print(String(millis()) + " " + String(ina219.getCurrent_mA()) + " " + String(ina219.getPower_mW()) + "\n");
 }
